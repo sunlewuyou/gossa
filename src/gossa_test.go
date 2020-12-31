@@ -2,15 +2,13 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 )
 
 func dieMaybe(t *testing.T, err error) {
@@ -24,11 +22,16 @@ func trimSpaces(str string) string {
 	return space.ReplaceAllString(str, " ")
 }
 
-func get(t *testing.T, url string) string {
+func getRaw(t *testing.T, url string) []byte {
 	resp, err := http.Get(url)
 	dieMaybe(t, err)
 	body, err := ioutil.ReadAll(resp.Body)
 	dieMaybe(t, err)
+	return body
+}
+
+func get(t *testing.T, url string) string {
+	body := getRaw(t, url)
 	return trimSpaces(string(body))
 }
 
@@ -113,6 +116,21 @@ func doTestRegular(t *testing.T, url string, testExtra bool) {
 		t.Fatal("fetching a invalid file didnt errored")
 	} else if testExtra {
 		fetchAndTestDefault(t, url+path) // extra path will just redirect to root dir
+	}
+
+	// ~~~~~~~~~~~~~~~~~
+	fmt.Println("\r\n~~~~~~~~~~ test zip")
+	bodyRaw := getRaw(t, url+"zip?zipPath=%2F%E4%B8%AD%E6%96%87%2F&zipName=%E4%B8%AD%E6%96%87")
+	hashStr := fmt.Sprintf("%x", sha256.Sum256(bodyRaw))
+	if hashStr != "b02436a76b149e6c4458bbbe622ab7c5e789bb0d26b87f604cf0f989cfaf669f" {
+		t.Fatal("invalid zip checksum", hashStr)
+	}
+
+	// ~~~~~~~~~~~~~~~~~
+	fmt.Println("\r\n~~~~~~~~~~ test zip invalid path")
+	body0 = get(t, url+"zip?zipPath=%2Ftmp&zipName=subdir")
+	if body0 != `error` {
+		t.Fatal("zip passed for invalid path")
 	}
 
 	// ~~~~~~~~~~~~~~~~~
@@ -297,33 +315,17 @@ func doTestReadonly(t *testing.T, url string) {
 	fmt.Printf("\r\n=========\r\n")
 }
 
-func startGossa(what string) int {
-	cmd := exec.Command("/usr/bin/make", what)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stdout
-	cmd.Start()
-	time.Sleep(3 * time.Second)
-	return cmd.Process.Pid
-}
-
-func killallgossa() {
-	cmd := exec.Command("/usr/bin/killall", "gossa")
-	cmd.Start()
-}
-
-func TestGossa(t *testing.T) {
-	startGossa("run")
+func TestNormal(t *testing.T) {
 	fmt.Println("========== testing normal path ============")
 	doTestRegular(t, "http://127.0.0.1:8001/", false)
-	killallgossa()
+}
 
-	startGossa("run-extra")
+func TestExtra(t *testing.T) {
 	fmt.Println("========== testing extras options ============")
 	doTestRegular(t, "http://127.0.0.1:8001/fancy-path/", true)
-	killallgossa()
+}
 
-	startGossa("run-ro")
+func TestRo(t *testing.T) {
 	fmt.Println("========== testing read only ============")
 	doTestReadonly(t, "http://127.0.0.1:8001/")
-	killallgossa()
 }
