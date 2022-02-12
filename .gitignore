@@ -4,9 +4,10 @@ gossa-linux-arm
 gossa-linux-arm64
 gossa-mac
 gossa-windows.exe
-gossa_test.go
-build-all
+builds
+gossa.test
 
+*.out
 .vscode
 test-fixture/*
 test-fixture/*/*
@@ -41,3 +42,7 @@ test-fixture/*/*
 !test-fixture/fancy-path/*
 !test-fixture/ext/*
 !test-fixture/ext
+!test-fixture/.some-hidden-file
+!test-fixture/hols/.hidden-folder
+!test-fixture/hols/.hidden-folder/some-file
+!test-fixture/compress/hols-sym

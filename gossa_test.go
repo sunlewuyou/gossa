@@ -1,8 +1,8 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,6 +28,19 @@ func getRaw(t *testing.T, url string) []byte {
 	body, err := ioutil.ReadAll(resp.Body)
 	dieMaybe(t, err)
 	return body
+}
+
+func getZip(t *testing.T, needle string, dest string) (int, bool) {
+	b := getRaw(t, dest)
+	unzipped, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	dieMaybe(t, err)
+	length := len(unzipped.File)
+	for _, file := range unzipped.File {
+		if file.Name == needle {
+			return length, true
+		}
+	}
+	return length, false
 }
 
 func get(t *testing.T, url string) string {
@@ -97,6 +110,13 @@ func doTestRegular(t *testing.T, url string, testExtra bool) {
 	fetchAndTestDefault(t, url)
 
 	// ~~~~~~~~~~~~~~~~~
+	fmt.Println("\r\n~~~~~~~~~~ test fetching another page")
+	body0 = get(t, url+"/hols")
+	if !strings.Contains(body0, "glasgow.jpg") {
+		t.Fatal("fetching a subfolder failed")
+	}
+
+	// ~~~~~~~~~~~~~~~~~
 	fmt.Println("\r\n~~~~~~~~~~ test fetching an invalid path - redirected to root")
 	fetchAndTestDefault(t, url+"../../")
 	fetchAndTestDefault(t, url+"hols/../../")
@@ -119,16 +139,25 @@ func doTestRegular(t *testing.T, url string, testExtra bool) {
 	}
 
 	// ~~~~~~~~~~~~~~~~~
-	fmt.Println("\r\n~~~~~~~~~~ test zip")
-	bodyRaw := getRaw(t, url+"zip?zipPath=%2F%E4%B8%AD%E6%96%87%2F&zipName=%E4%B8%AD%E6%96%87")
-	hashStr := fmt.Sprintf("%x", sha256.Sum256(bodyRaw))
-	if hashStr != "b02436a76b149e6c4458bbbe622ab7c5e789bb0d26b87f604cf0f989cfaf669f" {
-		t.Fatal("invalid zip checksum", hashStr)
+	fmt.Println("\r\n~~~~~~~~~~ test zipping of folder 中文")
+	len, foundFile := getZip(t, "檔案.html", url+"zip?zipPath=%2F%E4%B8%AD%E6%96%87%2F&zipName=%E4%B8%AD%E6%96%87")
+	if len != 1 || !foundFile {
+		t.Fatal("invalid zip generated")
+	}
+
+	// ~~~~~~~~~~~~~~~~~
+	fmt.Println("\r\n~~~~~~~~~~ test zipping of folder with hidden file")
+	_, foundHidden := getZip(t, ".hidden-folder/some-file", url+"zip?zipPath=%2fhols%2f&zipName=hols")
+	if foundHidden && !testExtra {
+		t.Fatal("invalid zip generated - shouldnt contain hidden folder")
+	} else if !foundHidden && testExtra {
+		t.Fatal("invalid zip generated - should contain hidden folder")
 	}
 
 	// ~~~~~~~~~~~~~~~~~
 	fmt.Println("\r\n~~~~~~~~~~ test zip invalid path")
 	body0 = get(t, url+"zip?zipPath=%2Ftmp&zipName=subdir")
+	println(body0)
 	if body0 != `error` {
 		t.Fatal("zip passed for invalid path")
 	}
@@ -194,12 +223,20 @@ func doTestRegular(t *testing.T, url string, testExtra bool) {
 
 	// ~~~~~~~~~~~~~~~~~
 	fmt.Println("\r\n~~~~~~~~~~ test symlink, should succeed: ", testExtra)
-	body0 = get(t, url+"/support/readme.md")
-	hasReadme := strings.Contains(body0, `the master branch is automatically built and pushed`)
+	body0 = get(t, url+"/support/")
+	hasListing := strings.Contains(body0, `readme.md`)
+	body1 = get(t, url+"/support/readme.md")
+	hasReadme := strings.Contains(body1, `the master branch is automatically built and pushed`)
+
 	if !testExtra && hasReadme {
-		t.Fatal("error symlink reached where illegal")
+		t.Fatal("error symlink file reached where illegal")
 	} else if testExtra && !hasReadme {
-		t.Fatal("error symlink unreachable")
+		t.Fatal("error symlink file unreachable")
+	}
+	if !testExtra && hasListing {
+		t.Fatal("error symlink folder reached where illegal")
+	} else if testExtra && !hasListing {
+		t.Fatal("error symlink folder unreachable")
 	}
 
 	if testExtra {
@@ -292,7 +329,7 @@ func doTestReadonly(t *testing.T, url string) {
 	path = "%2F%E1%84%92%E1%85%A1%20%E1%84%92%E1%85%A1" // "하 하" encoded
 	payload = "123 하"
 	body0 = postDummyFile(t, url, path, payload)
-	body1 = get(t, url+path)
+	get(t, url+path)
 	if body0 == `ok` {
 		t.Fatal("post file passed - should not be allowed")
 	}
@@ -300,7 +337,7 @@ func doTestReadonly(t *testing.T, url string) {
 	// ~~~~~~~~~~~~~~~~~
 	fmt.Println("\r\n~~~~~~~~~~ test mv rpc")
 	body0 = postJSON(t, url+"rpc", `{"call":"mv","args":["/AAA", "/hols/AAA"]}`)
-	body1 = fetchAndTestDefault(t, url)
+	fetchAndTestDefault(t, url)
 	if body0 == `ok` {
 		t.Fatal("mv rpc passed - should not be allowed")
 	}
@@ -328,4 +365,8 @@ func TestExtra(t *testing.T) {
 func TestRo(t *testing.T) {
 	fmt.Println("========== testing read only ============")
 	doTestReadonly(t, "http://127.0.0.1:8001/")
+}
+
+func TestRunMain(t *testing.T) {
+	main()
 }

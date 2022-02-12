@@ -1,12 +1,9 @@
-FLAGS := -ldflags "-s -w"
+FLAGS := -ldflags "-s -w" -trimpath
 NOCGO := CGO_ENABLED=0
 
 build:
-	cp src/gossa.go gossa.go
-	make -C gossa-ui/
 	go vet && go fmt
 	${NOCGO} go build ${FLAGS} -o gossa
-	rm gossa.go
 
 install:
 	sudo cp gossa /usr/local/bin
@@ -20,51 +17,54 @@ run-ro:
 run-extra:
 	./gossa -verb=true -prefix="/fancy-path/" -k=false -symlinks=true test-fixture
 
+ci: build-all test
+	echo "done"
+
 test:
-	make build
-	rm -rf gossa_test.go
 	-@cd test-fixture && ln -s ../support .; true
-	cp src/gossa_test.go .
+	go test -cover -c -tags testrunmain
 
-	-@killall gossa; true
-	-make run &
+	timeout -s SIGINT 3 ./gossa.test -test.coverprofile=normal.out -test.run '^TestRunMain' -verb=true test-fixture &
+	sleep 2
 	go test -run TestNormal
+	sleep 1
 
-	killall gossa
-	-make run-extra &
+	timeout -s SIGINT 3 ./gossa.test -test.coverprofile=extra.out -test.run '^TestRunMain' -prefix='/fancy-path/' -k=false -symlinks=true test-fixture &
+	sleep 2
 	go test -run TestExtra
+	sleep 1
 
-	killall gossa
-	-make run-ro &
+	timeout -s SIGINT 3 ./gossa.test -test.coverprofile=ro.out -test.run '^TestRunMain' -ro=true test-fixture &
+	sleep 2
 	go test -run TestRo
+	sleep 1
 
-	killall gossa
+	# gocovmerge ro.out extra.out normal.out > all.out
+	# go tool cover -html all.out
+	# go tool cover -func=all.out | grep main | grep '9.\..\%'
 
 watch:
-	ls src/* gossa-ui/* | entr -rc make build run
+	ls gossa.go gossa_test.go gossa-ui/* | entr -rc make build run
 
 watch-extra:
-	ls src/* gossa-ui/* | entr -rc make build run-extra
+	ls gossa.go gossa_test.go gossa-ui/* | entr -rc make build run-extra
 
 watch-ro:
-	ls src/* gossa-ui/* | entr -rc make build run-ro
+	ls gossa.go gossa_test.go gossa-ui/* | entr -rc make build run-ro
 
 watch-test:
-	ls src/* gossa-ui/* | entr -rc make test
+	ls gossa.go gossa_test.go gossa-ui/* | entr -rc make test
 
-build-all:
-	cp src/gossa.go gossa.go
-	make -C gossa-ui/
-	${NOCGO}  GOOS=linux    GOARCH=amd64  go build ${FLAGS} -o build-all/gossa-linux64
-	${NOCGO}  GOOS=linux    GOARCH=arm    go build ${FLAGS} -o build-all/gossa-linux-arm
-	${NOCGO}  GOOS=linux    GOARCH=arm64  go build ${FLAGS} -o build-all/gossa-linux-arm64
-	${NOCGO}  GOOS=darwin   GOARCH=amd64  go build ${FLAGS} -o build-all/gossa-mac
-	${NOCGO}  GOOS=windows  GOARCH=amd64  go build ${FLAGS} -o build-all/gossa-windows.exe
-	rm gossa.go
+build-all: build
+	${NOCGO}  GOOS=linux    GOARCH=amd64  go build ${FLAGS} -o builds/gossa-linux-x64
+	${NOCGO}  GOOS=linux    GOARCH=arm    go build ${FLAGS} -o builds/gossa-linux-arm
+	${NOCGO}  GOOS=linux    GOARCH=arm64  go build ${FLAGS} -o builds/gossa-linux-arm64
+	${NOCGO}  GOOS=darwin   GOARCH=amd64  go build ${FLAGS} -o builds/gossa-mac-x64
+	${NOCGO}  GOOS=darwin   GOARCH=arm64  go build ${FLAGS} -o builds/gossa-mac-arm64
+	${NOCGO}  GOOS=windows  GOARCH=amd64  go build ${FLAGS} -o builds/gossa-windows.exe
+	sha256sum builds/*
 
 clean:
-	-rm gossa.go
-	-rm gossa_test.go
 	-rm gossa
 	-rm gossa-linux64
 	-rm gossa-linux-arm
