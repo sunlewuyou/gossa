@@ -9,27 +9,29 @@ gossa
 
 a fast and simple webserver for your files, that's dependency-free and with under 250 lines of code, easy to review.
 
-a [simple UI](https://github.com/pldubouilh/gossa-ui) comes as default, featuring :
+a simple UI comes as default, featuring :
 
   * 🔍 files/directories browser & handler
   * 📩 drag-and-drop uploader
-  * 🥂 fast golang static server
   * 💾 90s web UI that prints in milliseconds
-  * 📸 video streaming & picture browser
+  * 📸 video streaming, picture browser, pdf viewer
   * ✍️ simple note editor
   * ⌨️ keyboard navigation
   * 🚀 lightweight and dependency free codebase
   * 🔒 >95% test coverage and reproducible builds
+  * 🥂 fast golang static server
   * 💑 easy multi account setup, read-only mode
-  * ✨ PWA enabled
+  * ✨ PWA-able
+  * 🖥️ multi-platform support
 
-### build
-built blobs are available on the [release page](https://github.com/pldubouilh/gossa/releases) - or simply `make build` this repo.
+### install / build
+[arch linux (AUR)](https://aur.archlinux.org/packages/gossa/) - e.g. `yay -S gossa`
+
+[nix](https://search.nixos.org/packages?channel=unstable&show=gossa&from=0&size=50&sort=relevance&type=packages&query=gossa) - e.g. `nix-shell -p gossa`
+
+binaries are available on the [release page](https://github.com/pldubouilh/gossa/releases) - or simply `make build` this repo.
+
 all builds are reproducible, checkout the hashes on the release page.
-
-arch linux users can also install through the [user repos](https://aur.archlinux.org/packages/gossa/) - e.g. `yay -S gossa`
-
-automatic boot-time startup can be handled with a user systemd service - see [support](https://github.com/pldubouilh/gossa/tree/master/support)
 
 ### usage
 ```sh
@@ -46,9 +48,11 @@ release images are pushed to [dockerhub](https://hub.docker.com/r/pldubouilh/gos
 
 ```sh
 # pull from dockerhub and run
+% mkdir ~/LocalDirToShare
 % sudo docker run -v ~/LocalDirToShare:/shared -p 8001:8001 pldubouilh/gossa
 ```
 
 in a do-one-thing-well mindset, HTTPS and authentication has been left to middlewares and proxies. [sample caddy configs](https://github.com/pldubouilh/gossa/blob/master/support/) are available to quickly setup multi users setups along with https.
 
+automatic boot-time startup can be handled with a user systemd service - see [support](https://github.com/pldubouilh/gossa/tree/master/support)
 

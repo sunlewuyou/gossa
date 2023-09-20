@@ -23,6 +23,29 @@ import (
 	"strings"
 )
 
+type rowTemplate struct {
+	Name string
+	Href template.HTML
+	Size string
+	Ext  string
+}
+
+type pageTemplate struct {
+	Title       template.HTML
+	ExtraPath   template.HTML
+	Ro          bool
+	RowsFiles   []rowTemplate
+	RowsFolders []rowTemplate
+}
+
+var host = flag.String("h", "127.0.0.1", "host to listen to")
+var port = flag.String("p", "8001", "port to listen to")
+var extraPath = flag.String("prefix", "/", "url prefix at which gossa can be reached, e.g. /gossa/ (slashes of importance)")
+var symlinks = flag.Bool("symlinks", false, "follow symlinks \033[4mWARNING\033[0m: symlinks will by nature allow to escape the defined path (default: false)")
+var verb = flag.Bool("verb", false, "verbosity")
+var skipHidden = flag.Bool("k", true, "\nskip hidden files")
+var ro = flag.Bool("ro", false, "read only mode (no upload, rename, move, etc...)")
+
 type rpcCall struct {
 	Call string   `json:"call"`
 	Args []string `json:"args"`
@@ -92,15 +115,18 @@ func replyList(w http.ResponseWriter, r *http.Request, fullPath string, path str
 		}
 
 		href := url.PathEscape(el.Name())
+		name := el.Name()
+
 		if el.IsDir() && strings.HasPrefix(href, "/") {
 			href = strings.Replace(href, "/", "", 1)
 		}
+
 		if el.IsDir() {
-			p.RowsFolders = append(p.RowsFolders, rowTemplate{el.Name() + "/", template.HTML(href), "", "folder"})
+			p.RowsFolders = append(p.RowsFolders, rowTemplate{name + "/", template.HTML(href), "", "folder"})
 		} else {
-			sl := strings.Split(el.Name(), ".")
+			sl := strings.Split(name, ".")
 			ext := strings.ToLower(sl[len(sl)-1])
-			p.RowsFiles = append(p.RowsFiles, rowTemplate{el.Name(), template.HTML(href), humanize(el.Size()), ext})
+			p.RowsFiles = append(p.RowsFiles, rowTemplate{name, template.HTML(href), humanize(el.Size()), ext})
 		}
 	}
 
@@ -233,10 +259,10 @@ func enforcePath(p string) string {
 }
 
 func main() {
-	if flag.Parse(); len(flag.Args()) > 0 {
+	if flag.Parse(); len(flag.Args()) == 1 {
 		rootPath = flag.Args()[0]
 	} else {
-		fmt.Printf("\nusage: ./gossa ~/directory-to-share\n\n")
+		fmt.Printf("\nusage: ./gossa [OPTIONS] ~/directory-to-share\n\n")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -246,16 +272,6 @@ func main() {
 	check(err)
 	server := &http.Server{Addr: *host + ":" + *port, Handler: handler}
 
-	// clean shutdown - used only for coverage test
-	// go func() {
-	// 	sigchan := make(chan os.Signal, 1)
-	// 	signal.Notify(sigchan, os.Interrupt)
-	// 	<-sigchan
-	// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	// 	defer cancel()
-	// 	server.Shutdown(ctx)
-	// }()
-
 	if !*ro {
 		http.HandleFunc(*extraPath+"rpc", rpc)
 		http.HandleFunc(*extraPath+"post", upload)
@@ -264,7 +280,9 @@ func main() {
 	http.HandleFunc("/", doContent)
 	handler = http.StripPrefix(*extraPath, http.FileServer(http.Dir(rootPath)))
 
-	fmt.Printf("Gossa starting on directory %s\nListening on http://%s:%s%s\n", rootPath, *host, *port, *extraPath)
+	fmt.Printf("Gossa starting on directory %s\n", rootPath)
+	fmt.Printf("Verbose: %t, Symlinks: %t, Read-Only: %t, Hidden-Files Skipped: %t\n", *verb, *symlinks, *ro, *skipHidden)
+	fmt.Printf("Listening on http://%s:%s%s\n", *host, *port, *extraPath)
 	if err = server.ListenAndServe(); err != http.ErrServerClosed {
 		check(err)
 	}
