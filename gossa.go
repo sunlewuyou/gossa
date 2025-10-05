@@ -3,11 +3,17 @@ package main
 import (
 	"archive/zip"
 	"compress/gzip"
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"hash"
 	"html"
 	"html/template"
 	"io"
@@ -100,8 +106,9 @@ func replyList(w http.ResponseWriter, r *http.Request, fullPath string, path str
 	p.Title = template.HTML(html.EscapeString(title))
 
 	for _, el := range files {
-		info, err := el.Info()
-		if err != nil {
+		info, errInfo := el.Info()
+		el, err := os.Stat(fullPath + "/" + el.Name())
+		if err != nil || errInfo != nil {
 			log.Println("error - cant stat a file", err)
 			continue
 		}
@@ -109,7 +116,7 @@ func replyList(w http.ResponseWriter, r *http.Request, fullPath string, path str
 		if *skipHidden && strings.HasPrefix(el.Name(), ".") {
 			continue // dont print hidden files if we're not allowed
 		}
-		if *symlinks && info.Mode()&os.ModeSymlink != 0 {
+		if !*symlinks && info.Mode()&os.ModeSymlink != 0 {
 			continue // dont follow symlinks if we're not allowed
 		}
 
@@ -126,7 +133,7 @@ func replyList(w http.ResponseWriter, r *http.Request, fullPath string, path str
 		} else {
 			sl := strings.Split(name, ".")
 			ext := strings.ToLower(sl[len(sl)-1])
-			row := rowTemplate{name, template.URL(href), humanize(info.Size()), ext}
+			row := rowTemplate{name, template.URL(href), humanize(el.Size()), ext}
 			p.RowsFiles = append(p.RowsFiles, row)
 		}
 	}
@@ -226,21 +233,42 @@ func zipRPC(w http.ResponseWriter, r *http.Request) {
 func rpc(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var rpc rpcCall
-	defer exitPath(w, "rpc", rpc)
+	defer exitPath(w, "rpc", &rpc)
 	bodyBytes, err := io.ReadAll(r.Body)
 	check(err)
 	json.Unmarshal(bodyBytes, &rpc)
+	ret := []byte("ok")
 
-	if rpc.Call == "mkdirp" {
+	switch rpc.Call {
+	case "mkdirp":
 		err = os.MkdirAll(enforcePath(rpc.Args[0]), os.ModePerm)
-	} else if rpc.Call == "mv" {
+	case "mv":
 		err = os.Rename(enforcePath(rpc.Args[0]), enforcePath(rpc.Args[1]))
-	} else if rpc.Call == "rm" {
+	case "rm":
 		err = os.RemoveAll(enforcePath(rpc.Args[0]))
+	case "sum":
+		file, err := os.Open(enforcePath(rpc.Args[0]))
+		check(err)
+		var hash hash.Hash
+		switch rpc.Args[1] {
+		case "md5":
+			hash = md5.New()
+		case "sha1":
+			hash = sha1.New()
+		case "sha256":
+			hash = sha256.New()
+		case "sha512":
+			hash = sha512.New()
+		}
+		_, err = io.Copy(hash, file)
+		check(err)
+		checksum := hash.Sum(nil)
+		ret = make([]byte, hex.EncodedLen(len(checksum)))
+		hex.Encode(ret, checksum)
 	}
 
 	check(err)
-	w.Write([]byte("ok"))
+	w.Write(ret)
 }
 
 func enforcePath(p string) string {

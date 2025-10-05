@@ -160,6 +160,7 @@ function rpc (call, args, cb) {
 const mkdirCall = (path, cb) => rpc('mkdirp', [prependPath(path)], cb)
 const rmCall = (path1, cb) => rpc('rm', [prependPath(path1)], cb)
 const mvCall = (path1, path2, cb) => rpc('mv', [path1, path2], cb)
+const sumCall = (path, type, cb) => rpc('sum', [prependPath(path), type], cb)
 
 // File upload
 let totalDone = 0
@@ -383,7 +384,7 @@ function resetView () {
   scrollToArrow()
 }
 
-window.quitAll = () => helpOff() || picsOff() || videosOff() || padOff() || pdfOff()
+window.quitAll = () => helpOff() || sumsOff() || picsOff() || videosOff() || padOff() || pdfOff()
 
 // Mkdir icon
 window.mkdirBtn = function () {
@@ -659,6 +660,40 @@ function helpOff () {
   return true
 }
 
+// checksums
+function getSum (type) {
+  upBarPc.style.display = 'block'
+  upBarPc.innerText = 'computing checksum...'
+  upBarPc.style.width = '100%'
+  sumsOff()
+  sumCall(getASelected().innerText, type, loaded => {
+    navigator.clipboard.writeText(loaded.target.responseText)
+    upBarPc.style.display = 'none'
+    flicker(okBadge)
+  })
+}
+
+const isSumsMode = () => sums.style.display === 'block'
+
+const sumsToggle = () => isSumsMode() ? sumsOff() : sumsOn()
+
+function sumsOn () {
+  if (isFolder(getASelected())) {
+    alert('cannot checksum a directory')
+    return
+  }
+  sums.style.display = 'block'
+  table.style.display = 'none'
+}
+
+window.sumsOff = sumsOff
+function sumsOff () {
+  if (!isSumsMode()) return
+  sums.style.display = 'none'
+  table.style.display = 'table'
+  return true
+}
+
 // Paste handler
 const cuts = []
 function onPaste () {
@@ -749,40 +784,69 @@ document.body.addEventListener('keydown', e => {
     return
   }
 
-  // Ctrl keys
-  if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
-    switch (e.code) {
-      case 'KeyC':
-        return prevent(e) || isRo() || cpPath()
+  // Modifier keys
+  if (!e.shiftKey) {
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.code) {
+        case 'KeyC':
+          return prevent(e) || isRo() || cpPath()
 
-      case 'KeyH':
-        return prevent(e) || isRo() || helpToggle()
+        case 'KeyH':
+          return prevent(e) || isRo() || helpToggle()
 
-      case 'KeyX':
-        return prevent(e) || isRo() || onCut()
+        case 'KeyZ':
+          return prevent(e) || isRo() || sumsToggle()
 
-      case 'KeyR':
-        return prevent(e) || refresh()
+        case 'KeyX':
+          return prevent(e) || isRo() || onCut()
 
-      case 'KeyV':
-        return prevent(e) || isRo() || ensureMove() || onPaste()
+        case 'KeyR':
+          return prevent(e) || refresh()
 
-      case 'Backspace':
-        return prevent(e) || isRo() || window.rm(e)
+        case 'KeyV':
+          return prevent(e) || isRo() || ensureMove() || onPaste()
 
-      case 'KeyE':
-        return prevent(e) || isRo() || window.rename(e)
+        case 'Backspace':
+          return prevent(e) || isRo() || window.rm(e)
 
-      case 'KeyM':
-        return prevent(e) || isRo() || window.mkdirBtn()
+        case 'KeyE':
+          return prevent(e) || isRo() || window.rename(e)
 
-      case 'KeyU':
-        return prevent(e) || isRo() || manualUpload.click()
+        case 'KeyM':
+          return prevent(e) || isRo() || window.mkdirBtn()
 
-      case 'Enter':
-      case 'ArrowRight':
-        return prevent(e) || dl(getASelected())
+        case 'KeyU':
+          return prevent(e) || isRo() || manualUpload.click()
+
+        case 'Enter':
+        case 'ArrowRight':
+          return prevent(e) || dl(getASelected())
+      }
+    } else if (isSumsMode()) {
+        switch (e.code) {
+          case 'Digit1':
+            return prevent(e) || isRo() || getSum('sha1')
+
+          case 'Digit2':
+            return prevent(e) || isRo() || getSum('sha256')
+
+          case 'Digit3':
+            return prevent(e) || isRo() || getSum('sha512')
+
+          case 'Digit5':
+            return prevent(e) || isRo() || getSum('md5')
+        }
     }
+  } else {
+      // Workaround Firefox requirement for transient activation
+      // https://developer.mozilla.org/en-US/docs/Web/Security/User_activation
+      // Firefox requires user interaction (that is not reserved by the user agent)
+      // before a file picker can be displayed. This means that ctrl/meta are not
+      // usable as modifiers until the user clicks the page or presses another
+      // non-modifier key. To work around this, the shift key can be used, instead.
+      if (e.code == 'KeyU') {
+          return prevent(e) || isRo() || manualUpload.click()
+      }
   }
 
   switch (e.code) {

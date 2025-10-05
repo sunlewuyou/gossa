@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="theme-color" content="rgb(45,52,54)">
     <meta name="msapplication-navbutton-color" content="rgb(45,52,54)">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="viewport" content="width=device-width">
 
     <link rel="manifest" href='data:application/manifest+json,{"name":"{{.Title}}","short_name":"{{.Title}}","description":"  ","icons":[{"src":"data:image/svg+xml;base64,favicon_will_be_here","sizes":"150x150","type":"image/svg+xml"}],"background":"rgb(45,52,54)","theme_color":"rgb(45,52,54)","display":"standalone"}' />
@@ -26,10 +26,11 @@
         <tr><td>Ctrl/Meta + C</td><td>copy URL to clipboard</td></tr>
         <tr><td>Ctrl/Meta + E</td><td>rename item</td></tr>
         <tr><td>Ctrl/Meta + Backspace</td><td>delete item</td></tr>
-        <tr><td>Ctrl/Meta + U</td><td>upload new file/folder</td></tr>
+        <tr><td>Ctrl/Meta/Shift + U</td><td>upload new file/folder</td></tr>
         <tr><td>Ctrl/Meta + M</td><td>create a new directory</td></tr>
         <tr><td>Ctrl/Meta + X</td><td>cut selected path</td></tr>
         <tr><td>Ctrl/Meta + V</td><td>paste previously selected paths to directory</td></tr>
+        <tr><td>Ctrl/Meta + Z</td><td>copy checksums of selected file</td></tr>
         <tr><td>Ctrl + click</td><td>download selected item as archive</td></tr>
         <tr><td>click file icon </td><td>rename item</td></tr>
         <tr><td>double click file icon</td><td>delete item</td></tr>
@@ -38,10 +39,18 @@
         <tr><td>any other letter</td><td>fuzzy search</td></tr>
     </tbody></table></div>
 
+    <div onclick="window.sumsOff()" style="display: none;" id="sums"><table id="sumsTable"><tbody>
+        <tr><td>Key</td><td>Hash Algorithm</td></tr>
+        <tr><td>1</td><td>copy sha1 sum</td></tr>
+        <tr><td>2</td><td>copy sha256 sum</td></tr>
+        <tr><td>3</td><td>copy sha512 sum</td></tr>
+        <tr><td>5</td><td>copy md5 sum</td></tr>
+    </tbody></table></div>
+
     <div style="display: none;" onclick="window.quitAll()" id="quitAll"><i style="display: none;" id="toast">cant reach server</i></div>
     <textarea style="display: none;" id="text-editor"></textarea>
     <div id="drop-grid"></div>
-    <input type="file" id="clickupload" style="display:none"/>
+    <input type="file" id="clickupload" multiple style="display:none"/>
 
     <h1 onclick="return titleClick(event)">.{{.Title}}</h1>
 
